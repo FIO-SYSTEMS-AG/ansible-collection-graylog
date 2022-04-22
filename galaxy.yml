@@ -1,0 +1,9 @@
+namespace: fio
+name: graylog
+version: 1.0.0
+readme: README.md
+authors:
+  - FIO SYSTEMS AG
+description: modules for usage of Graylog API
+license_file: LICENSE
+tags: [graylog]
