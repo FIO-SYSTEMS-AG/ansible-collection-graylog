@@ -1,6 +1,12 @@
 #!/usr/bin/python
 
 from __future__ import (absolute_import, division, print_function)
+from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.urls import fetch_url, to_text
+import base64
+import json
+from typing import NoReturn
+
 __metaclass__ = type
 
 DOCUMENTATION = r'''
@@ -60,12 +66,6 @@ RETURN = r'''
 #
 '''
 
-from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.urls import fetch_url, to_text
-from typing import NoReturn
-import base64
-import json
-
 
 def run_module():
   module_args = dict(
@@ -97,30 +97,18 @@ def run_module():
       existing_stream = item  
   
   if module.check_mode:
-    result['changed'] = shouldCreateStream(param_state, existing_stream) or shouldUpdateStream(param_state, existing_stream) or shouldDeleteStream(param_state, existing_stream)
+    result['changed'] = should_create_stream(param_state, existing_stream) or should_update_stream(param_state, existing_stream) or should_delete_stream(param_state, existing_stream)
     module.exit_json(**result)
 
   # execute
-  if (shouldCreateStream(param_state, existing_stream)):
+  if (should_create_stream(param_state, existing_stream)):
     result['changed'] = create_stream(module)
-  elif (shouldUpdateStream(param_state, existing_stream)):
+  elif (should_update_stream(param_state, existing_stream)):
     result['changed'] = update_stream(module, existing_stream)
-  elif (shouldDeleteStream(param_state, existing_stream)):
+  elif (should_delete_stream(param_state, existing_stream)):
     result['changed'] = delete_stream(module, existing_stream)
 
   module.exit_json(**result)
-
-
-def shouldCreateStream(state: str, existing_stream: dict) -> bool:
-  return state == "present" and existing_stream is None
-
-
-def shouldUpdateStream(state: str, existing_stream: dict) -> bool:
-  return state == "present" and existing_stream is not None
-
-
-def shouldDeleteStream(state: str, existing_stream: dict) -> bool:
-  return state == "absent" and existing_stream is not None
 
 
 def get_streams(module: AnsibleModule) -> dict:
@@ -132,14 +120,26 @@ def get_streams(module: AnsibleModule) -> dict:
   return json.loads(to_text(response.read(), errors='surrogate_or_strict'))
 
 
+def should_create_stream(state: str, existing_stream: dict) -> bool:
+  return state == "present" and existing_stream is None
+
+
 def create_stream(module: AnsibleModule) -> bool:
   print('create stream')
   return True
 
 
+def should_update_stream(state: str, existing_stream: dict) -> bool:
+  return state == "present" and existing_stream is not None
+
+
 def update_stream(module: AnsibleModule, existing_stream: dict) -> bool:
   print('update stream')
   return True
+
+
+def should_delete_stream(state: str, existing_stream: dict) -> bool:
+  return state == "absent" and existing_stream is not None
 
 
 def delete_stream(module: AnsibleModule, existing_stream: dict) -> bool:
