@@ -94,7 +94,8 @@ def run_module():
   existing_stream = None
   for item in streams_response['streams']:
     if (item['title'] == param_name):
-      existing_stream = item  
+      existing_stream = item
+      break
   
   if module.check_mode:
     result['changed'] = should_create_stream(param_state, existing_stream) or should_update_stream(param_state, existing_stream) or should_delete_stream(param_state, existing_stream)
@@ -112,7 +113,7 @@ def run_module():
 
 
 def get_streams(module: AnsibleModule) -> dict:
-  response, info = fetch_url(module=module, url=(get_apiBaseUrl(module) + "/api/streams"), headers=get_apiRequestHeaders(module), method='GET')
+  response, info = fetch_url(module=module, url=(get_apiBaseUrl(module) + "/streams"), headers=get_apiRequestHeaders(module), method='GET')
 
   if info['status'] != 200:
     module.fail_json(msg=info['msg'])
@@ -148,7 +149,7 @@ def delete_stream(module: AnsibleModule, existing_stream: dict) -> bool:
 
 
 def get_apiBaseUrl(module: AnsibleModule) -> str:
-  return module.params["endpoint_url"]
+  return module.params["endpoint_url"] + '/api'
 
 
 def get_apiRequestHeaders(module: AnsibleModule) -> dict:
