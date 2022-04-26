@@ -4,6 +4,17 @@
       "endpoint_token": "foobar",
       "validate_certs": "False",
       "state": "present",
-      "name": "mystream"
+      "name": "mystream",
+      "started": true,
+      "index_set_id": "abcde",
+      "rules": [
+        {
+          "description": "myrule",
+          "field": "myfield",
+          "value": "myfieldvalue",
+          "type": 1,
+          "inverted": false
+        }
+      ]
   }
 }
