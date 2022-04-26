@@ -1,10 +1,11 @@
 #!/usr/bin/python
 
 from __future__ import (absolute_import, division, print_function)
-from typing import NoReturn
+from typing import Tuple
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
 import base64
+import copy
 import json
 
 __metaclass__ = type
@@ -121,9 +122,9 @@ def run_module():
     if (item['title'] == param_name):
       existing_stream = item
       break
-  
-  # test
-  module.check_mode = True
+
+  # for testing
+  # module.check_mode = True
 
   if module.check_mode:
     result['changed'] = should_create_stream(param_state, existing_stream) or should_update_stream(module, param_state, existing_stream) or should_delete_stream(param_state, existing_stream)
@@ -154,15 +155,11 @@ def should_create_stream(state: str, existing_stream: dict) -> bool:
 
 
 def create_stream(module: AnsibleModule) -> bool:
-  data = {
-    'title': module.params['name'],
-    'description': module.params['name'],
-    'remove_matches_from_default_stream': True,
-    'index_set_id': module.params['index_set_id'],
-    'rules': module.params['rules'],
-  }
-
-  response, info = fetch_url(module=module, url=("%s/streams" % (get_apiBaseUrl(module))), headers=get_apiRequestHeaders(module), method='POST', data=module.jsonify(data))
+  response, info = fetch_url(
+    module=module, url=("%s/streams" % (get_apiBaseUrl(module))),
+    headers=get_apiRequestHeaders(module),
+    method='POST',
+    data=module.jsonify(map_data_from_module(module.params)))
 
   if info['status'] != 201:
     module.fail_json(msg=info['msg'])
@@ -176,7 +173,7 @@ def create_stream(module: AnsibleModule) -> bool:
   return True
 
 
-def resume_stream(module: AnsibleModule, stream_id: str) -> NoReturn:
+def resume_stream(module: AnsibleModule, stream_id: str) -> None:
   _, info = fetch_url(module=module, url=("%s/streams/%s/resume" % (get_apiBaseUrl(module), stream_id)), headers=get_apiRequestHeaders(module), method='POST')
 
   if info['status'] != 204:
@@ -188,32 +185,76 @@ def should_update_stream(module: AnsibleModule, state: str, existing_stream: dic
     return False
 
   return (
-    module.params['name'] != existing_stream['title'] 
-    or module.params['name'] != existing_stream['description']
-    or module.params['index_set_id'] != existing_stream['index_set_id']
-    or should_update_stream_rules(module.params['rules'], existing_stream['rules'])
+    existing_stream['title'] != module.params['name'] 
+    or existing_stream['description'] != module.params['name']
+    or existing_stream['index_set_id'] != module.params['index_set_id']
+    or should_update_stream_rules(existing_stream['rules'], module.params['rules'])
   )
 
 
-def should_update_stream_rules(param_rules, current_rules) -> bool:
+def should_update_stream_rules(current_rules, param_rules) -> bool:
   if len(param_rules) != len(current_rules):
     return True
   
   for item in current_rules:
-    return (next((x for x in param_rules
-      if x['field'] == item['field']
-        and x['value'] == item['value']
-        and x['description'] == item['description']
-        and x['type'] == item['type']
-        and x['inverted'] == item['inverted']), None)
-      is None)
+    if (any(x for x in param_rules if rule_equals(x, item) is False)):
+      return True
 
   return False
 
 
-def update_stream(module: AnsibleModule, existing_stream: dict) -> bool:
-  print('update stream')
+def update_stream(module: AnsibleModule, existing_stream: dict) -> None:
+  data = copy.deepcopy(existing_stream)
+  data = map_data_from_module(module.params, data)
+
+  _, info = fetch_url(
+    module=module, url=("%s/streams/%s" % (get_apiBaseUrl(module), data['id'])),
+    headers=get_apiRequestHeaders(module),
+    method='PUT',
+    data=module.jsonify(data))  
+
+  if info['status'] != 200:
+    module.fail_json(msg=info['msg'])
+
+  # update rules (can not be updated via PUT streams/<id>)
+  update_rules(module, existing_stream)
+
   return True
+
+
+def update_rules(module: AnsibleModule, existing_stream: dict) -> None:
+  add, delete = get_rules_changes(existing_stream['rules'], module.params['rules'])
+
+  for item in delete:
+    delete_rule(module, existing_stream, item)
+
+  for item in add:
+    add_rule(module, existing_stream, item)
+
+
+def delete_rule(module: AnsibleModule, stream: dict, rule: dict) -> None:
+  _, info = fetch_url(
+    module=module, url=("%s/streams/%s/rules/%s" % (get_apiBaseUrl(module), stream['id'], rule['id'])),
+    headers=get_apiRequestHeaders(module),
+    method='DELETE')
+
+  if info['status'] != 204:
+    module.fail_json(msg=info['msg'])
+
+  return
+
+
+def add_rule(module: AnsibleModule, stream: dict,  rule: dict) -> None:
+  _, info = fetch_url(
+    module=module, url=("%s/streams/%s/rules" % (get_apiBaseUrl(module), stream['id'])),
+    headers=get_apiRequestHeaders(module),
+    method='POST',
+    data=module.jsonify(rule))
+
+  if info['status'] != 201:
+    module.fail_json(msg=info['msg'])
+
+  return
 
 
 def should_delete_stream(state: str, existing_stream: dict) -> bool:
@@ -223,6 +264,42 @@ def should_delete_stream(state: str, existing_stream: dict) -> bool:
 def delete_stream(module: AnsibleModule, existing_stream: dict) -> bool:
   print('delete stream')
   return True
+
+
+def map_data_from_module(source: dict, destination: dict = None) -> dict:
+  if destination is None:
+    destination = {}
+  
+  destination['title'] = source['name']
+  destination['description'] = source['name']
+  destination['remove_matches_from_default_stream'] = True
+  destination['index_set_id'] = source['index_set_id']
+  destination['rules'] = source['rules']
+
+  return destination
+
+
+def rule_equals(a: dict, b: dict) -> bool:
+  return (a.get('field') == b.get('field')
+    and a.get('value') == b.get('value')
+    and a.get('type') == b.get('type')
+    and a.get('inverted') == b.get('inverted'))
+
+
+# returns tuple(add, delete) lists
+def get_rules_changes(current: list, updated: list) -> Tuple[list, list]:
+  add = []
+  delete = []
+
+  for item in current:
+    if len(updated) == 0 or any(x for x in updated if rule_equals(x, item)) is False:
+      delete.append(item)
+
+  for item in updated:
+    if len(current) == 0 or any(x for x in current if rule_equals(x, item) is False):
+      add.append(item)
+
+  return add, delete
 
 
 def get_apiBaseUrl(module: AnsibleModule) -> str:
