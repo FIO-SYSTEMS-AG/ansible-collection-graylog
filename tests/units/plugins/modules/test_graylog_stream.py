@@ -3,7 +3,6 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-from tests.units.utils import ModuleTestCase
 from plugins.modules.graylog_stream import should_update_stream_rules
 
 
