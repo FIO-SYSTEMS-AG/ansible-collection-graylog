@@ -180,19 +180,41 @@ def resume_stream(module: AnsibleModule, stream_id: str) -> None:
     module.fail_json(msg=info['msg'])
 
 
+def pause_stream(module: AnsibleModule, stream_id: str) -> None:
+  _, info = fetch_url(module=module, url=("%s/streams/%s/pause" % (get_apiBaseUrl(module), stream_id)), headers=get_apiRequestHeaders(module), method='POST')
+
+  if info['status'] != 204:
+    module.fail_json(msg=info['msg'])
+
+
 def should_update_stream(module: AnsibleModule, state: str, existing_stream: dict) -> bool:
   if state == "present" and existing_stream is None:
     return False
 
+  print("stream_started_is_equal_to_params: " + str(stream_started_is_equal_to_params(existing_stream, module.params)))
+
   return (
-    existing_stream['title'] != module.params['name'] 
-    or existing_stream['description'] != module.params['name']
-    or existing_stream['index_set_id'] != module.params['index_set_id']
-    or should_update_stream_rules(existing_stream['rules'], module.params['rules'])
+    stream_has_equal_values_as_params(existing_stream, module.params) is False
+    or stream_started_is_equal_to_params(existing_stream, module.params) is False
+    or stream_rules_should_be_updated(existing_stream.get("rules"), module.params.get("rules"))
   )
 
 
-def should_update_stream_rules(current_rules, param_rules) -> bool:
+def stream_has_equal_values_as_params(stream: dict, params: dict) -> bool:
+  return (stream.get("title") == params.get("name") 
+    and stream.get("description") == params.get("name")
+    and stream.get("index_set_id") == params.get("index_set_id"))
+
+
+def stream_started_is_equal_to_params(stream: dict, params: dict) -> bool:
+  return stream_is_started(stream) == params.get("started", True)
+
+
+def stream_is_started(stream: dict) -> bool:
+  return stream.get("disabled") is False
+
+
+def stream_rules_should_be_updated(current_rules, param_rules) -> bool:
   if len(param_rules) != len(current_rules):
     return True
   
@@ -216,10 +238,25 @@ def update_stream(module: AnsibleModule, existing_stream: dict) -> None:
   if info['status'] != 200:
     module.fail_json(msg=info['msg'])
 
+  if stream_started_is_equal_to_params(existing_stream, module.params) is False:
+    update_stream_started(module, existing_stream, module.params)
+
   # update rules (can not be updated via PUT streams/<id>)
   update_rules(module, existing_stream)
 
   return True
+
+
+def update_stream_started(module: AnsibleModule, existing_stream: dict, params: dict) -> None:
+  should_be_started = params.get("started", True)
+  is_started = stream_is_started(existing_stream)
+
+  if is_started:
+    if should_be_started is False:
+      pause_stream(module, existing_stream.get("id"))
+  else:
+    if should_be_started:
+      resume_stream(module, existing_stream.get("id"))
 
 
 def update_rules(module: AnsibleModule, existing_stream: dict) -> None:

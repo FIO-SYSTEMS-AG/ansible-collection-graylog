@@ -7,7 +7,7 @@ from plugins.modules.graylog_stream import *
 
 
 class TestCheckMode():
-
+  
   def test_sets_change_when_rule_value_changes(self):  
     current_rules = [{
       'field': 'foo',
@@ -21,7 +21,7 @@ class TestCheckMode():
       'type': 1,
     }]
 
-    change = should_update_stream_rules(current_rules, param_rules)
+    change = stream_has_equal_values_as_params(current_rules, param_rules)
 
     assert change is True
 
@@ -35,7 +35,7 @@ class TestCheckMode():
       'type': 1,
     }]
 
-    change = should_update_stream_rules(current_rules, param_rules)
+    change = stream_has_equal_values_as_params(current_rules, param_rules)
 
     assert change is True
 
@@ -49,7 +49,7 @@ class TestCheckMode():
 
     param_rules = []
 
-    change = should_update_stream_rules(current_rules, param_rules)
+    change = stream_has_equal_values_as_params(current_rules, param_rules)
 
     assert change is True
 
@@ -71,7 +71,7 @@ class TestCheckMode():
       }
     ]
 
-    change = should_update_stream_rules(current_rules, param_rules)
+    change = stream_has_equal_values_as_params(current_rules, param_rules)
 
     assert change is True
 
