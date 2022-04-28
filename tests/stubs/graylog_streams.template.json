@@ -1,0 +1,20 @@
+{
+  "ANSIBLE_MODULE_ARGS": {
+      "endpoint_url": "https://localhost:9000",
+      "endpoint_token": "foobar",
+      "validate_certs": false,
+      "state": "present",
+      "name": "mystream",
+      "started": true,
+      "index_set_id": "abcde",
+      "rules": [
+        {
+          "description": "myrule",
+          "field": "myfield",
+          "value": "myfieldvalue",
+          "type": 1,
+          "inverted": false
+        }
+      ]
+  }
+}
