@@ -170,7 +170,7 @@ def create_stream(module: AnsibleModule, stream_params: StreamParams) -> bool:
   response_stream = json.loads(to_text(response.read(), errors='surrogate_or_strict'))
   stream_id = response_stream['stream_id']
 
-  if module.params['started'] == True:
+  if stream_params.started == True:
     resume_stream(module, stream_id)
 
   return True
@@ -194,11 +194,7 @@ def should_update_stream(state: str, stream: Stream, stream_params: StreamParams
   if state == "present" and stream is None:
     return False
 
-  return (
-    stream.properties_are_equal(stream_params) is False
-    or stream.started_is_equal(stream_params) is False
-    or stream.rules_are_equal(stream_params) is False
-  )
+  return stream.equals(stream_params) is False
 
 
 def update_stream(module: AnsibleModule, stream: Stream, stream_params: StreamParams) -> None:

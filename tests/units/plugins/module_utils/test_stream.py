@@ -52,8 +52,10 @@ class TestComparison():
 
 
   @pytest.mark.parametrize("a,b,expected", [ 
+    ([], [ { "field": "foo" } ], False),
+    ([ { "field": "foo" } ], [], False),
     ([ { "field": "foo" } ], [ { "field": "foo" } ], True),
-    ([ { "field": "foo" } ], [ { "field": "bar" } ], False),
+    ([ { "field": "foo" } ], [ { "field": "bar" } ], False)
   ])
   def test_rules_are_equal(self, a: list, b: list, expected: bool):
     stream_a = StreamBase()
@@ -126,3 +128,47 @@ class TestChangeDetector():
 
     assert 0 == len(delete)
     assert 1 == len(add)
+
+
+  def test_get_rules_changes_removes_duplicates(self):
+    stream = StreamBase()
+    stream.rules = [
+      {
+        'id': 'abc0',
+        'field': 'foo',
+        'value': '1',          
+        'type': 1,
+      },
+      {
+        'id': 'abc1',
+        'field': 'bar',
+        'value': 'baz',          
+        'type': 1,
+      },
+      {
+        'id': 'abc2',
+        'field': 'bar',
+        'value': 'baz',
+        'type': 1,
+      }
+    ]
+
+    stream_params = StreamBase()
+    stream_params.rules = [
+      {
+        'field': 'foo',
+        'value': '1',
+        'type': 1,
+      },
+      {
+        'id': 'abc1',
+        'field': 'bar',
+        'value': 'baz',          
+        'type': 1,
+      },
+    ]
+
+    add, delete = stream.get_rules_changes(stream_params)
+
+    assert sum(1 for x in delete if x['field'] == 'bar') == 1
+    assert 0 == len(add)

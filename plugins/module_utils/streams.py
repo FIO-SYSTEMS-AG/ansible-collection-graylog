@@ -61,6 +61,14 @@ class StreamBase():
     self._rules = value
 
 
+  def equals(self, stream: "StreamBase") -> bool:    
+    return (
+      self.properties_are_equal(stream)
+      and self.started_is_equal(stream)
+      and self.rules_are_equal(stream)
+    )
+
+
   def properties_are_equal(self, stream: "StreamBase") -> bool:
     return (
       self.title == stream.title
@@ -74,31 +82,31 @@ class StreamBase():
 
 
   def rules_are_equal(self, stream: "StreamBase") -> bool:
-    if len(self.rules) != len(stream.rules):
-      return False
-
-    for item in self.rules:
-      if (any(x for x in stream.rules if self._rule_equals(x, item) is False)):
-        return False
-
-    return True
+    add, delete = self.get_rules_changes(stream)
+    return len(add) == 0 and len(delete) == 0
 
 
   # returns tuple(add, delete) lists
-  def get_rules_changes(self, stream: "StreamBase") -> Tuple[list, list]:
-    rules = stream.rules
-    add = []
-    delete = []
+  def get_rules_changes(self, stream_params: "StreamBase") -> Tuple[list, list]:   
+    add_list = []
+    delete_list = []
 
     for item in self.rules:
-      if len(rules) == 0 or any(x for x in rules if self._rule_equals(x, item)) is False:
-        delete.append(item)
+      if len(stream_params.rules) == 0 or any(x for x in stream_params.rules if self._rule_equals(x, item)) is False:
+        delete_items = [x for x in self.rules if self._rule_equals(x, item)]
+        for delete_item in delete_items:
+          if (any(x for x in delete_list if x == delete_item) is False):
+            delete_list.append(delete_item)
 
-    for item in rules:
-      if len(self.rules) == 0 or any(x for x in self.rules if self._rule_equals(x, item) is False):
-        add.append(item)
+    for item in stream_params.rules:
+      existing_items = [x for x in self.rules if self._rule_equals(x, item)]
+      if (len(existing_items) == 0):
+        add_list.append(item)
+      elif (len(existing_items) > 1):
+        for existing_item in existing_items[1:]:
+          delete_list.append(existing_item)
 
-    return add, delete
+    return add_list, delete_list
 
 
   def _rule_equals(self, a: dict, b: dict) -> bool:

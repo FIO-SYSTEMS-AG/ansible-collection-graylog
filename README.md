@@ -44,4 +44,4 @@ Docs:
 
 Testing single module with a stub: `python plugins/modules/graylog_stream.py tests/stubs/graylog_streams.json`
 
-Unit-Testing single module: `python -m pytest -r a --fulltrace --color yes tests/units/plugins/modules/test_graylog_stream.py`
+Unit-Testing single module: `python -m pytest -r a --fulltrace --color yes tests/units/plugins/module_utils/test_stream.py`

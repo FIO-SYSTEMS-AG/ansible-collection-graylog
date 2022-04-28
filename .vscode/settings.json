@@ -1,9 +1,10 @@
 {
     "python.testing.pytestArgs": [
-        "tests"
+      "tests"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
+    "python.envFile": "${workspaceFolder}/.env",
     "python.analysis.extraPaths": [
       "/mnt/c/Projects"
     ]
