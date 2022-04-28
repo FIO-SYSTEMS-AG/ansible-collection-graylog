@@ -1,14 +1,16 @@
 #!/usr/bin/python
 
 from __future__ import (absolute_import, division, print_function)
-from typing import Tuple
+__metaclass__ = type
+
+
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
+from plugins.module_utils import Stream, StreamParams
 import base64
 import copy
 import json
 
-__metaclass__ = type
 
 DOCUMENTATION = r'''
 ---
@@ -113,28 +115,41 @@ def run_module():
 
   param_state = module.params["state"]
   param_name = module.params["name"]
+  stream_params = StreamParams(module.params)
 
   streams_response = get_streams(module)
 
   # check
+  stream = None
   existing_stream = None
   for item in streams_response['streams']:
     if (item['title'] == param_name):
       existing_stream = item
+      stream = Stream(item)
       break
 
   # for testing
   # module.check_mode = True
 
+  print('stream_params')
+  print(str(stream_params))
+  print('----------')
+  print('stream')
+  print(str(stream))
+
   if module.check_mode:
-    result['changed'] = should_create_stream(param_state, existing_stream) or should_update_stream(module, param_state, existing_stream) or should_delete_stream(param_state, existing_stream)
+    result['changed'] = (
+      should_create_stream(param_state, existing_stream)
+      or should_update_stream(module, param_state, stream, stream_params)
+      or should_delete_stream(param_state, existing_stream)
+    )    
     module.exit_json(**result)
 
   # execute
   if (should_create_stream(param_state, existing_stream)):
-    result['changed'] = create_stream(module)
-  elif (should_update_stream(module, param_state, existing_stream)):
-    result['changed'] = update_stream(module, existing_stream)
+    result['changed'] = create_stream(module, stream_params)
+  elif (should_update_stream(module, param_state, stream, stream_params)):
+    result['changed'] = update_stream(module, stream, stream_params)
   elif (should_delete_stream(param_state, existing_stream)):
     result['changed'] = delete_stream(module, existing_stream)
 
@@ -154,12 +169,12 @@ def should_create_stream(state: str, existing_stream: dict) -> bool:
   return state == "present" and existing_stream is None
 
 
-def create_stream(module: AnsibleModule) -> bool:
+def create_stream(module: AnsibleModule, stream_params: StreamParams) -> bool: 
   response, info = fetch_url(
     module=module, url=("%s/streams" % (get_apiBaseUrl(module))),
     headers=get_apiRequestHeaders(module),
     method='POST',
-    data=module.jsonify(map_data_from_module(module.params)))
+    data=module.jsonify(stream_params.map_to_dto()))
 
   if info['status'] != 201:
     module.fail_json(msg=info['msg'])
@@ -187,47 +202,20 @@ def pause_stream(module: AnsibleModule, stream_id: str) -> None:
     module.fail_json(msg=info['msg'])
 
 
-def should_update_stream(module: AnsibleModule, state: str, existing_stream: dict) -> bool:
-  if state == "present" and existing_stream is None:
+def should_update_stream(module: AnsibleModule, state: str, stream: Stream, stream_params: StreamParams) -> bool:
+  if state == "present" and stream is None:
     return False
 
-  print("stream_started_is_equal_to_params: " + str(stream_started_is_equal_to_params(existing_stream, module.params)))
-
   return (
-    stream_has_equal_values_as_params(existing_stream, module.params) is False
-    or stream_started_is_equal_to_params(existing_stream, module.params) is False
-    or stream_rules_should_be_updated(existing_stream.get("rules"), module.params.get("rules"))
+    stream.properties_are_equal(stream_params) is False
+    or stream.started_is_equal(stream_params) is False
+    or stream.rules_are_equal(stream_params) is False
   )
 
 
-def stream_has_equal_values_as_params(stream: dict, params: dict) -> bool:
-  return (stream.get("title") == params.get("name") 
-    and stream.get("description") == params.get("name")
-    and stream.get("index_set_id") == params.get("index_set_id"))
-
-
-def stream_started_is_equal_to_params(stream: dict, params: dict) -> bool:
-  return stream_is_started(stream) == params.get("started", True)
-
-
-def stream_is_started(stream: dict) -> bool:
-  return stream.get("disabled") is False
-
-
-def stream_rules_should_be_updated(current_rules, param_rules) -> bool:
-  if len(param_rules) != len(current_rules):
-    return True
-  
-  for item in current_rules:
-    if (any(x for x in param_rules if rule_equals(x, item) is False)):
-      return True
-
-  return False
-
-
-def update_stream(module: AnsibleModule, existing_stream: dict) -> None:
-  data = copy.deepcopy(existing_stream)
-  data = map_data_from_module(module.params, data)
+def update_stream(module: AnsibleModule, stream: Stream, stream_params: StreamParams) -> None:
+  data = copy.deepcopy(stream.dto)
+  data = stream_params.map_to_dto(data)
 
   _, info = fetch_url(
     module=module, url=("%s/streams/%s" % (get_apiBaseUrl(module), data['id'])),
@@ -238,40 +226,37 @@ def update_stream(module: AnsibleModule, existing_stream: dict) -> None:
   if info['status'] != 200:
     module.fail_json(msg=info['msg'])
 
-  if stream_started_is_equal_to_params(existing_stream, module.params) is False:
-    update_stream_started(module, existing_stream, module.params)
+  if stream.started_is_equal(stream_params) is False:
+    update_stream_started(module, stream, stream_params)
 
   # update rules (can not be updated via PUT streams/<id>)
-  update_rules(module, existing_stream)
+  update_rules(module, stream, stream_params)
 
   return True
 
 
-def update_stream_started(module: AnsibleModule, existing_stream: dict, params: dict) -> None:
-  should_be_started = params.get("started", True)
-  is_started = stream_is_started(existing_stream)
-
-  if is_started:
-    if should_be_started is False:
-      pause_stream(module, existing_stream.get("id"))
+def update_stream_started(module: AnsibleModule, stream: Stream, stream_params: StreamParams) -> None:
+  if stream.started:
+    if stream_params.started is False:
+      pause_stream(module, stream.id)
   else:
-    if should_be_started:
-      resume_stream(module, existing_stream.get("id"))
+    if stream_params.started:
+      resume_stream(module, stream.id)
 
 
-def update_rules(module: AnsibleModule, existing_stream: dict) -> None:
-  add, delete = get_rules_changes(existing_stream['rules'], module.params['rules'])
+def update_rules(module: AnsibleModule, stream: Stream, stream_params: StreamParams) -> None:
+  add, delete = stream.get_rules_changes(stream_params)
 
   for item in delete:
-    delete_rule(module, existing_stream, item)
+    delete_rule(module, stream, item)
 
   for item in add:
-    add_rule(module, existing_stream, item)
+    add_rule(module, stream, item)
 
 
-def delete_rule(module: AnsibleModule, stream: dict, rule: dict) -> None:
+def delete_rule(module: AnsibleModule, stream: Stream, rule: dict) -> None:
   _, info = fetch_url(
-    module=module, url=("%s/streams/%s/rules/%s" % (get_apiBaseUrl(module), stream['id'], rule['id'])),
+    module=module, url=("%s/streams/%s/rules/%s" % (get_apiBaseUrl(module), stream.id, rule['id'])),
     headers=get_apiRequestHeaders(module),
     method='DELETE')
 
@@ -281,9 +266,9 @@ def delete_rule(module: AnsibleModule, stream: dict, rule: dict) -> None:
   return
 
 
-def add_rule(module: AnsibleModule, stream: dict,  rule: dict) -> None:
+def add_rule(module: AnsibleModule, stream: Stream,  rule: dict) -> None:
   _, info = fetch_url(
-    module=module, url=("%s/streams/%s/rules" % (get_apiBaseUrl(module), stream['id'])),
+    module=module, url=("%s/streams/%s/rules" % (get_apiBaseUrl(module), stream.id)),
     headers=get_apiRequestHeaders(module),
     method='POST',
     data=module.jsonify(rule))
@@ -301,42 +286,6 @@ def should_delete_stream(state: str, existing_stream: dict) -> bool:
 def delete_stream(module: AnsibleModule, existing_stream: dict) -> bool:
   print('delete stream')
   return True
-
-
-def map_data_from_module(source: dict, destination: dict = None) -> dict:
-  if destination is None:
-    destination = {}
-  
-  destination['title'] = source['name']
-  destination['description'] = source['name']
-  destination['remove_matches_from_default_stream'] = True
-  destination['index_set_id'] = source['index_set_id']
-  destination['rules'] = source['rules']
-
-  return destination
-
-
-def rule_equals(a: dict, b: dict) -> bool:
-  return (a.get('field') == b.get('field')
-    and a.get('value') == b.get('value')
-    and a.get('type') == b.get('type')
-    and a.get('inverted') == b.get('inverted'))
-
-
-# returns tuple(add, delete) lists
-def get_rules_changes(current: list, updated: list) -> Tuple[list, list]:
-  add = []
-  delete = []
-
-  for item in current:
-    if len(updated) == 0 or any(x for x in updated if rule_equals(x, item)) is False:
-      delete.append(item)
-
-  for item in updated:
-    if len(current) == 0 or any(x for x in current if rule_equals(x, item) is False):
-      add.append(item)
-
-  return add, delete
 
 
 def get_apiBaseUrl(module: AnsibleModule) -> str:
