@@ -121,37 +121,26 @@ def run_module():
 
   # check
   stream = None
-  existing_stream = None
   for item in streams_response['streams']:
     if (item['title'] == param_name):
-      existing_stream = item
       stream = Stream(item)
       break
 
-  # for testing
-  # module.check_mode = True
-
-  print('stream_params')
-  print(str(stream_params))
-  print('----------')
-  print('stream')
-  print(str(stream))
-
   if module.check_mode:
     result['changed'] = (
-      should_create_stream(param_state, existing_stream)
-      or should_update_stream(module, param_state, stream, stream_params)
-      or should_delete_stream(param_state, existing_stream)
+      should_create_stream(param_state, stream)
+      or should_update_stream(param_state, stream, stream_params)
+      or should_delete_stream(param_state, stream)
     )    
     module.exit_json(**result)
 
   # execute
-  if (should_create_stream(param_state, existing_stream)):
+  if (should_create_stream(param_state, stream)):
     result['changed'] = create_stream(module, stream_params)
-  elif (should_update_stream(module, param_state, stream, stream_params)):
+  elif (should_update_stream(param_state, stream, stream_params)):
     result['changed'] = update_stream(module, stream, stream_params)
-  elif (should_delete_stream(param_state, existing_stream)):
-    result['changed'] = delete_stream(module, existing_stream)
+  elif (should_delete_stream(param_state, stream)):
+    result['changed'] = delete_stream(module, stream)
 
   module.exit_json(**result)
 
@@ -165,8 +154,8 @@ def get_streams(module: AnsibleModule) -> dict:
   return json.loads(to_text(response.read(), errors='surrogate_or_strict'))
 
 
-def should_create_stream(state: str, existing_stream: dict) -> bool:
-  return state == "present" and existing_stream is None
+def should_create_stream(state: str, stream: Stream) -> bool:
+  return state == "present" and stream is None
 
 
 def create_stream(module: AnsibleModule, stream_params: StreamParams) -> bool: 
@@ -202,7 +191,7 @@ def pause_stream(module: AnsibleModule, stream_id: str) -> None:
     module.fail_json(msg=info['msg'])
 
 
-def should_update_stream(module: AnsibleModule, state: str, stream: Stream, stream_params: StreamParams) -> bool:
+def should_update_stream(state: str, stream: Stream, stream_params: StreamParams) -> bool:
   if state == "present" and stream is None:
     return False
 
@@ -279,12 +268,19 @@ def add_rule(module: AnsibleModule, stream: Stream,  rule: dict) -> None:
   return
 
 
-def should_delete_stream(state: str, existing_stream: dict) -> bool:
-  return state == "absent" and existing_stream is not None
+def should_delete_stream(state: str, stream: Stream) -> bool:
+  return state == "absent" and stream is not None
 
 
-def delete_stream(module: AnsibleModule, existing_stream: dict) -> bool:
-  print('delete stream')
+def delete_stream(module: AnsibleModule, stream: Stream) -> bool:
+  _, info = fetch_url(
+    module=module, url=("%s/streams/%s" % (get_apiBaseUrl(module), stream.id)),
+    headers=get_apiRequestHeaders(module),
+    method='DELETE')
+
+  if info['status'] != 204:
+    module.fail_json(msg=info['msg'])
+
   return True
 
 

@@ -109,10 +109,10 @@ class StreamBase():
 
 
   def __str__(self) -> str:
-    return ("Title: %s | Description: %s | Index-Set ID: %s | Started: %s | Rules: [%s]" % (self.title, self.description, self.index_set_id, self.started, self.str_rules()))
+    return ("Title: %s | Description: %s | Index-Set ID: %s | Started: %s | Rules: [%s]" % (self.title, self.description, self.index_set_id, self.started, self._str_rules()))
 
 
-  def str_rules(self) -> str:
+  def _str_rules(self) -> str:
     ret = ""
     for rule in self.rules:
       ret += " { Field: %s | Value: %s | Type: %s | Inverted: %s }" % (rule.get('field'), rule.get('value'), rule.get('type'), rule.get('inverted'))
