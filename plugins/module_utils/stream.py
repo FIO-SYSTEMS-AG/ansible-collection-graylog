@@ -1,4 +1,4 @@
-from plugins.module_utils import StreamBase
+from ansible_collections.fio.graylog.plugins.module_utils import StreamBase
 
 class Stream(StreamBase):
 

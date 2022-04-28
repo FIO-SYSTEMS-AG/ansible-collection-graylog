@@ -15,7 +15,15 @@
 | `inverted` | Rule inversion | `boolean` | false |
 
 
+
 ## Local development
+
+
+### Clone project
+
+- clone project into a path which is in your extraPaths (vscode) or PYTHONPATH variable
+- directory structure should be `./ansible_collections/fio/graylog`
+
 
 ### Prepare development environment
 
@@ -25,6 +33,7 @@ $ python -m venv venv
 $ source venv/bin/activate 
 $ pip install -r requirements.txt
 ```
+
 
 ### Test your module
 
