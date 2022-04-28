@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import pytest
-from plugins.module_utils import StreamBase
+from ansible_collections.fio.graylog.plugins.module_utils.streams import StreamBase
 
 
 class TestComparison():

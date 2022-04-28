@@ -119,3 +119,60 @@ class StreamBase():
     
     ret += " "
     return ret
+
+
+
+class StreamParams(StreamBase):
+  
+  def __init__(self, params: dict):
+    super().__init__()
+    self.title = params.get('name', '')
+    self.description = params.get('name', '')
+    self.index_set_id = params.get('index_set_id', '')
+    self.rules = params.get('rules', [])
+
+
+  def map_to_dto(self, destination: dict = None) -> dict:
+    if destination is None:
+      destination = {}
+  
+    destination['title'] = self.title
+    destination['description'] = self.description
+    destination['remove_matches_from_default_stream'] = True
+    destination['index_set_id'] = self.index_set_id
+    destination['rules'] = self.rules
+
+    return destination
+
+
+
+class Stream(StreamBase):
+
+  def __init__(self, dto: dict):
+    super().__init__()
+    self._dto = dto
+    self._id = dto.get('id', '')
+    self.title = dto.get('title', '')
+    self.description = dto.get('description', '')
+    self.index_set_id = dto.get('index_set_id', '')
+    self.rules = dto.get('rules', [])
+
+
+  @property
+  def dto(self) -> dict:
+    return self._dto
+
+
+  @dto.setter
+  def dto(self, value) -> None:
+    self._dto = value
+
+
+  @property
+  def id(self) -> str:
+    return self._id
+
+
+  @id.setter
+  def id(self, value) -> None:
+    self._id = value

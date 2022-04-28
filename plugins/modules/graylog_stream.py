@@ -5,7 +5,7 @@ __metaclass__ = type
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
-from ansible_collections.fio.graylog.plugins.module_utils import Stream, StreamParams
+from ansible_collections.fio.graylog.plugins.module_utils.streams import Stream, StreamParams
 import base64
 import copy
 import json
