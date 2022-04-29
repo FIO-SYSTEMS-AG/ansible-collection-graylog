@@ -5,7 +5,7 @@ __metaclass__ = type
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
-from ansible_collections.fio.graylog.plugins.module_utils.streams import Stream, StreamParams
+from ansible_collections.fio.graylog.plugins.module_utils.streams import Stream, StreamParams, StreamShare
 import base64
 import copy
 import json
@@ -101,6 +101,7 @@ def run_module():
     index_set_id=dict(type='str', required=True),
     rules=dict(type='list', required=False),
     started=dict(type='bool', required=False, default=False),
+    shares=dict(type='list', required=False)
   )
 
   result = dict(
@@ -116,15 +117,18 @@ def run_module():
   param_name = module.params["name"]
   stream_params = StreamParams(module.params)
 
-  streams_response = get_streams(module)
-
-  # check
   stream = None
+  streams_response = get_streams(module)  
   for item in streams_response['streams']:
     if (item['title'] == param_name):
       stream = Stream(item)
       break
 
+  shares, shares_dto = get_stream_shares(module, stream)
+  stream.shares = shares
+  stream.shares_dto = shares_dto
+
+  #module.check_mode = True
   if module.check_mode:
     result['changed'] = (
       should_create_stream(param_state, stream)
@@ -133,7 +137,6 @@ def run_module():
     )    
     module.exit_json(**result)
 
-  # execute
   if (should_create_stream(param_state, stream)):
     result['changed'] = create_stream(module, stream_params)
   elif (should_update_stream(param_state, stream, stream_params)):
@@ -144,12 +147,33 @@ def run_module():
   module.exit_json(**result)
 
 
+def get_stream_shares(module: AnsibleModule, existing_stream: Stream) -> "tuple[list[StreamShare], dict]":
+  api_url = get_apiBaseUrl(module)
+  stream_grn = 'grn::::stream:%s' % (existing_stream.id)
+  response, info = fetch_url(
+    module=module,
+    url=("%s/authz/shares/entities/%s/prepare" % (api_url, stream_grn)),
+    headers=get_apiRequestHeaders(module),
+    method='POST',
+    data='{}')
+
+  if info['status'] != 200:
+    module.fail_json(msg=info['msg'])
+
+  shares_dto = json.loads(to_text(response.read(), errors='surrogate_or_strict'))
+  active_shares = shares_dto['active_shares']
+  if active_shares is None or len(active_shares) == 0:
+    return [], shares_dto
+
+  return [StreamShare().load_from_dto(x) for x in active_shares], shares_dto
+
+
 def get_streams(module: AnsibleModule) -> dict:
   response, info = fetch_url(module=module, url=("%s/streams" % (get_apiBaseUrl(module))), headers=get_apiRequestHeaders(module), method='GET')
 
   if info['status'] != 200:
     module.fail_json(msg=info['msg'])
-  
+
   return json.loads(to_text(response.read(), errors='surrogate_or_strict'))
 
 
@@ -216,6 +240,9 @@ def update_stream(module: AnsibleModule, stream: Stream, stream_params: StreamPa
   # update rules (can not be updated via PUT streams/<id>)
   update_rules(module, stream, stream_params)
 
+  # update shares
+  update_shares(module, stream, stream_params)
+
   return True
 
 
@@ -236,6 +263,33 @@ def update_rules(module: AnsibleModule, stream: Stream, stream_params: StreamPar
 
   for item in add:
     add_rule(module, stream, item)
+
+
+def update_shares(module: AnsibleModule, stream: Stream, stream_params: StreamParams) -> None:
+  add, delete = stream.get_shares_changes(stream_params)
+  final_list: dict = stream.shares_dto['selected_grantee_capabilities']
+
+  for item in delete:
+    item_grn_key = item.get_grn_key()
+    if item_grn_key in final_list:
+      del final_list[item_grn_key]
+
+  for item in add:
+    item_grn_key = item.get_grn_key()
+    final_list[item_grn_key] = item.capability
+
+  dto = {
+    'selected_grantee_capabilities': final_list
+  }
+
+  _, info = fetch_url(
+    module=module, url=("%s/authz/shares/entities/grn::::stream:%s" % (get_apiBaseUrl(module), stream.id)),
+    headers=get_apiRequestHeaders(module),
+    method='POST',
+    data=module.jsonify(dto))  
+
+  if info['status'] != 200:
+    module.fail_json(msg=info['msg'])
 
 
 def delete_rule(module: AnsibleModule, stream: Stream, rule: dict) -> None:
