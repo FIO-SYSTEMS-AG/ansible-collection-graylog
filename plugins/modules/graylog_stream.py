@@ -133,9 +133,10 @@ def run_module():
       stream = Stream(item)
       break
 
-  shares, shares_dto = get_stream_shares(module, stream)
-  stream.shares = shares
-  stream.shares_dto = shares_dto
+  if stream is not None:
+    shares, shares_dto = get_stream_shares(module, stream)
+    stream.shares = shares
+    stream.shares_dto = shares_dto
 
   #module.check_mode = True
   if module.check_mode:
@@ -202,6 +203,10 @@ def create_stream(module: AnsibleModule, stream_params: StreamParams) -> bool:
 
   response_stream = json.loads(to_text(response.read(), errors='surrogate_or_strict'))
   stream_id = response_stream['stream_id']
+
+  # update shares
+  stream = Stream({})
+  update_shares(module, stream, stream_params)
 
   if stream_params.started == True:
     resume_stream(module, stream_id)
@@ -276,7 +281,7 @@ def update_rules(module: AnsibleModule, stream: Stream, stream_params: StreamPar
 
 def update_shares(module: AnsibleModule, stream: Stream, stream_params: StreamParams) -> None:
   add, delete = stream.get_shares_changes(stream_params)
-  final_list: dict = stream.shares_dto['selected_grantee_capabilities']
+  final_list: dict = {} if stream.shares_dto is None else stream.shares_dto['selected_grantee_capabilities']
 
   for item in delete:
     item_grn_key = item.get_grn_key()
