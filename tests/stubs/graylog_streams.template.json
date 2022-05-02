@@ -15,6 +15,13 @@
           "type": 1,
           "inverted": false
         }
+      ],
+      "shares": [
+        {
+          "type": "user",
+          "id": "123456",
+          "capability": "view"
+        }
       ]
   }
 }

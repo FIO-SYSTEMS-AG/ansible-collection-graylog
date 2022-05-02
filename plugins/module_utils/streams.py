@@ -1,4 +1,6 @@
+from __future__ import annotations
 from typing import Tuple
+import re
 
 
 class StreamBase():
@@ -9,6 +11,7 @@ class StreamBase():
     self._index_set_id = ""
     self._started = False
     self._rules = []
+    self._shares = []
 
 
   @property
@@ -61,11 +64,22 @@ class StreamBase():
     self._rules = value
 
 
+  @property
+  def shares(self) -> "list[StreamShare]":
+    return self._shares
+
+
+  @shares.setter
+  def shares(self, value) -> None:
+    self._shares = value
+
+
   def equals(self, stream: "StreamBase") -> bool:    
     return (
       self.properties_are_equal(stream)
       and self.started_is_equal(stream)
       and self.rules_are_equal(stream)
+      and self.shares_are_equal(stream)
     )
 
 
@@ -86,8 +100,13 @@ class StreamBase():
     return len(add) == 0 and len(delete) == 0
 
 
+  def shares_are_equal(self, stream: "StreamBase") -> bool:
+    add, delete = self.get_shares_changes(stream)
+    return len(add) == 0 and len(delete) == 0
+
+
   # returns tuple(add, delete) lists
-  def get_rules_changes(self, stream_params: "StreamBase") -> Tuple[list, list]:   
+  def get_rules_changes(self, stream_params: "StreamBase") -> "Tuple[list, list]":   
     add_list = []
     delete_list = []
 
@@ -109,11 +128,40 @@ class StreamBase():
     return add_list, delete_list
 
 
+  # returns tuple(add, delete) lists
+  def get_shares_changes(self, stream_params: "StreamBase") -> "Tuple[list[StreamShare], list[StreamShare]]":   
+    add_list = []
+    delete_list = []
+
+    for item in self.shares:
+      if len(stream_params.shares) == 0 or any(x for x in stream_params.shares if self._share_equals(x, item)) is False:
+        delete_items = [x for x in self.shares if self._share_equals(x, item)]
+        for delete_item in delete_items:
+          if (any(x for x in delete_list if x == delete_item) is False):
+            delete_list.append(delete_item)
+
+    for item in stream_params.shares:
+      existing_items = [x for x in self.shares if self._share_equals(x, item)]
+      if (len(existing_items) == 0):
+        add_list.append(item)
+      elif (len(existing_items) > 1):
+        for existing_item in existing_items[1:]:
+          delete_list.append(existing_item)
+
+    return add_list, delete_list
+
+
   def _rule_equals(self, a: dict, b: dict) -> bool:
     return (a.get('field') == b.get('field')
       and a.get('value') == b.get('value')
       and a.get('type') == b.get('type')
       and a.get('inverted') == b.get('inverted'))
+
+
+  def _share_equals(self, a: StreamShare, b: StreamShare) -> bool:   
+    return (a.type == b.type
+      and a.id == b.id
+      and a.capability == b.capability)
 
 
   def __str__(self) -> str:
@@ -138,6 +186,7 @@ class StreamParams(StreamBase):
     self.description = params.get('name', '')
     self.index_set_id = params.get('index_set_id', '')
     self.rules = params.get('rules', [])
+    self.shares = [StreamShare().load_from_params(x) for x in params.get('shares', [])]
 
 
   def map_to_dto(self, destination: dict = None) -> dict:
@@ -159,6 +208,7 @@ class Stream(StreamBase):
   def __init__(self, dto: dict):
     super().__init__()
     self._dto = dto
+    self._shares_dto = None
     self._id = dto.get('id', '')
     self.title = dto.get('title', '')
     self.description = dto.get('description', '')
@@ -177,6 +227,16 @@ class Stream(StreamBase):
 
 
   @property
+  def shares_dto(self) -> dict:
+    return self._shares_dto
+
+
+  @shares_dto.setter
+  def shares_dto(self, value) -> None:
+    self._shares_dto = value
+
+
+  @property
   def id(self) -> str:
     return self._id
 
@@ -184,3 +244,62 @@ class Stream(StreamBase):
   @id.setter
   def id(self, value) -> None:
     self._id = value
+
+
+
+class StreamShare():
+  
+  def __init__(self, type: str = "", id: str = "", capability: str = ""):
+    self._type = type
+    self._id = id
+    self._capability = capability
+
+
+  @property
+  def type(self) -> str:
+    return self._type
+
+
+  @type.setter
+  def type(self, value) -> None:
+    self._type = value
+
+
+  @property
+  def id(self) -> str:
+    return self._id
+
+
+  @id.setter
+  def id(self, value) -> None:
+    self._id = value
+
+
+  @property
+  def capability(self) -> str:
+    return self._capability
+
+
+  @capability.setter
+  def capability(self, value) -> None:
+    self._capability = value
+
+
+  def load_from_dto(self, dto: dict) -> "StreamShare":
+    grantee_match = re.search('grn::::(.+):(.+)', dto.get('grantee', ''))
+    if grantee_match is None:
+      raise ValueError('could not parse grantee')
+    
+    self.type = grantee_match.group(1)
+    self.id = grantee_match.group(2)
+    self.capability = dto.get('capability')
+    return self
+
+
+  def load_from_params(self, params: dict) -> "StreamShare":
+    self.__init__(params.get('type'), params.get('id'), params.get('capability'))
+    return self
+
+
+  def get_grn_key(self) -> str:
+    return 'grn::::%s:%s' % (self.type, self.id)

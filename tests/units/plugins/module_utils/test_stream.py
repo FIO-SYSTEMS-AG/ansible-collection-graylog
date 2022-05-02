@@ -4,7 +4,7 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 import pytest
-from ansible_collections.fio.graylog.plugins.module_utils.streams import StreamBase
+from ansible_collections.fio.graylog.plugins.module_utils.streams import StreamBase, StreamShare
 
 
 class TestComparison():
@@ -172,3 +172,37 @@ class TestChangeDetector():
 
     assert sum(1 for x in delete if x['field'] == 'bar') == 1
     assert 0 == len(add)
+
+
+  def test_get_share_changes_returns_correct_lists(self):
+
+    stream = StreamBase()
+    stream.shares = [ StreamShare("user", "foo", "view"), StreamShare("user", "bar", "view") ]
+
+    stream_params = StreamBase()
+    stream_params.shares = [ StreamShare("user", "baz", "view"), StreamShare("user", "bar", "manage") ]
+
+    add, delete = stream.get_shares_changes(stream_params)
+
+    assert 2 == len(delete)
+    assert any(x for x in delete if x.id == 'foo')
+    assert any(x for x in delete if x.id == 'bar')
+    assert 2 == len(add)
+    assert any(x for x in add if x.id == 'baz' and x.capability == 'view')
+    assert any(x for x in add if x.id == 'bar' and x.capability == 'manage')
+
+
+
+class TestShareParsing():
+
+  def test_can_parse_user_from_dto(self):    
+    dto = {
+      "grantee":"grn::::user:626a6d4ab61ee103107f1c60",
+      "capability":"view"
+    }
+
+    stream_share = StreamShare().load_from_dto(dto)
+
+    assert "user" == stream_share.type
+    assert "626a6d4ab61ee103107f1c60" == stream_share.id
+    assert "view" == stream_share.capability
