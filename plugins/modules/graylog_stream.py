@@ -54,6 +54,11 @@ options:
     required: false
     type: list
     default: []
+  shares:
+    description: Shares for the stream.
+    required: false
+    type: list
+    default: []
   started:
     description: Flag indicating if the stream should be in started state.
     required: false
@@ -84,6 +89,10 @@ EXAMPLES = r'''
         value: bar
         type: 1
         inverted: False
+    shares:
+      - type: user
+        id: abc123
+        capability: view
 '''
 
 RETURN = r'''
