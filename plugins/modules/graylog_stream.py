@@ -202,14 +202,15 @@ def create_stream(module: AnsibleModule, stream_params: StreamParams) -> bool:
     module.fail_json(msg=info['msg'])
 
   response_stream = json.loads(to_text(response.read(), errors='surrogate_or_strict'))
-  stream_id = response_stream['stream_id']
 
-  # update shares
   stream = Stream({})
+  stream.id = response_stream['stream_id']
+
+  # create shares  
   update_shares(module, stream, stream_params)
 
   if stream_params.started == True:
-    resume_stream(module, stream_id)
+    resume_stream(module, stream.id)
 
   return True
 
