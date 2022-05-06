@@ -10,7 +10,7 @@
     name: My Stream
     state: present
     started: True
-    index_set_id: "{{ index_set_id }}"
+    index_set_id: qux
     rules:
       - field: source
         value: myapp
