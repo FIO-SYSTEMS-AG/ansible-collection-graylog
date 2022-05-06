@@ -1,19 +1,31 @@
 # ansible-collection-graylog
 
+This repository contains plugins to interact with the Graylog-API in a declarative manner.
+
+
 ## Usage
 
-### Undocumented fields
+You can include the collection in a `requirements.yml` file and install it via `ansible-galaxy collection install -r collections/requirements.yml`:
+```yaml
+---
+collections:
+  - name: fio.graylog
+    type: git
+    source: https://github.com/FIO-SYSTEMS-AG/ansible-collection-graylog.git
+    version: 1.0.0
+...
+```
 
-#### Stream-Rules object
+### Content
 
-| Field | Description | Allowed values | Sample value |
-|---|---|---|---|
-| `description` | Description for the rule | any `string` | `foo` |
-| `field` | Field name | any `string` | `bar` |
-| `value` | Field value | any `string` | `baz` |
-| `type` | Matching type | `integer`: <br/>`1` match exactly <br/>`2` match regular expression <br/>`3` greater than <br/>`4` smaller than <br/>`5` field presence <br/>`6` contain <br/>`7` always match <br/>`8` match input | 1 |
-| `inverted` | Rule inversion | `boolean` | false |
+Click on the name of the module to jump to an example.
 
+#### Modules
+Name | Supports Check-Mode | Description
+--- | --- | ---
+[fio.graylog.graylog_stream](https://github.com/FIO-SYSTEMS-AG/ansible-collection-graylog/blob/main/plugins/modules/graylog_stream.md) | yes | CRUD stream with rules and shares
+
+For more non-obvious fields, visit [wiki/type-definitions](https://github.com/FIO-SYSTEMS-AG/ansible-collection-graylog/wiki/type-definitions).
 
 
 ## Local development
@@ -36,10 +48,6 @@ $ pip install -r requirements.txt
 
 
 ### Test your module
-
-
-Docs:
-- ...
 
 
 Testing single module with a stub: `python plugins/modules/graylog_stream.py tests/stubs/graylog_streams.json`
